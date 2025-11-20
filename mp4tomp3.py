@@ -9,7 +9,7 @@ from pydub import AudioSegment
 audio_path = "audio.mp3"
 text_path = "transcript.txt"
 video_path = "video.mp4"
-language = "pt-BR"
+language = "pt-BR"                      # pt-BR | zh-CN
 
 
 def convert_mp4_to_mp3(video_path, audio_path):
@@ -31,6 +31,7 @@ def transcribe_audio(audio_path, text_path, language="pt-BR"):
         audio_mp3 = audio_path
         audio_wav = "temp.wav"
         sound = AudioSegment.from_mp3(audio_mp3)
+        sound = sound.set_channels(1).set_frame_rate(16000) # Mono e 16kHz
         sound.export(audio_wav, format="wav")
         audio_path = audio_wav
 
