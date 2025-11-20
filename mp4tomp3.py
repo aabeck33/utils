@@ -1,15 +1,58 @@
-# Dependência -> FFmpeg: https://ffmpeg.org/download.html
+################################################################
+##   Script: mp4tomp3.py
+##   Autor: Alvaro Beck
+##   Descrição: Converte arquivos MP4 para MP3, transcreve áudio para texto,
+##              traduz texto e converte texto para fala.
+##   Data: 2024-06-10
+#
+# text_to_speach(text, output_audio_path, language="pt-BR")
+# substitute_audio_in_video(video_path, audio_path, output_video_path)
+# convert_mp4_to_mp3(video_path, audio_path)
+# transcribe_audio(audio_path, text_path, language="pt-BR")
+# transcribe_with_whisper(audio_path, model_size="base", input_language="pt")
+# translate_text(text, input_language="pt", output_language="en")
+# ------------------------------------------------------------------------------------------------
+# Dependência do SpeachRecognition -> FFmpeg: https://ffmpeg.org/download.html
+################################################################
 
-from moviepy import VideoFileClip
+from moviepy import VideoFileClip, AudioFileClip
 import speech_recognition as sr
+import whisper
+from googletrans import Translator
+from gtts import gTTS
 from pydub import AudioSegment
+import requests
 
 
 # Variáveis
 audio_path = "audio.mp3"
 text_path = "transcript.txt"
 video_path = "video.mp4"
-language = "pt-BR"                      # pt-BR | zh-CN
+output_video_path = "video_with_new_audio.mp4"
+output_audio_path = "output_audio.mp3"
+text = "Olá, este é um exemplo de conversão de texto para fala usando Python criado por Alvaro Beck."
+language = "pt-BR"                    # pt-BR | zh-CN
+input_language = "pt"                 # pt | zh
+output_language = "en"                # en | zh
+
+
+
+def text_to_speech(text, output_audio_path, language="pt-BR"):
+    tts = gTTS(text=text, lang=language)
+    tts.save(output_audio_path)
+    print(f"Áudio gerado com sucesso! Arquivo salvo em: {output_audio_path}")
+
+
+def substitute_audio_in_video(video_path, audio_path, output_video_path):
+    video = VideoFileClip(video_path)
+    new_audio = AudioFileClip(audio_path)
+
+    # Ajustar duração do áudio para combinar com o vídeo
+    new_audio = new_audio.set_duration(video.duration)
+
+    video_with_new_audio = video.set_audio(new_audio)
+    video_with_new_audio.write_videofile(output_video_path, codec="libx264", audio_codec="aac")
+    print(f"Áudio substituído com sucesso! Arquivo salvo em: {output_video_path}")
 
 
 def convert_mp4_to_mp3(video_path, audio_path):
@@ -21,7 +64,7 @@ def convert_mp4_to_mp3(video_path, audio_path):
     print("Conversão concluída! Áudio salvo em:", audio_path)
 
 
-def transcribe_audio(audio_path, text_path, language="pt-BR"):
+def transcribe_audio(audio_path, text_path, language="pt-BR") -> str:
     # Inicializa o reconhecedor
     r = sr.Recognizer()
 
@@ -45,10 +88,33 @@ def transcribe_audio(audio_path, text_path, language="pt-BR"):
     # Salva o texto transcrito em um arquivo
     with open(text_path, "w", encoding="utf-8") as f:
         f.write(texto)
+    print(f"Transcrição salva em: {text_path}")
+    return texto
+
+
+def transcribe_with_whisper(audio_path, model_size="base", input_language="pt") -> str:
+    model = whisper.load_model(model_size)
+    result = model.transcribe(audio_path, language=input_language)
+    print("Transcrição com Whisper:")
+    print(result["text"])
+    return result["text"]
+
+
+def translate_text(text, input_language="pt", output_language="en") -> str:
+    translator = Translator()
+    translated_text = translator.translate(text, src=input_language, dest=output_language).text
+    print(f"Texto traduzido para {output_language}:")
+    print(translated_text)
+    return translated_text
+
 
 
 if __name__ == "__main__":
-    #convert_mp4_to_mp3(video_path, audio_path)
-    transcribe_audio(audio_path, text_path, language)
+    # text_to_speach(text, output_audio_path, language="pt-BR")
+    # substitute_audio_in_video(video_path, audio_path, output_video_path)
+    # convert_mp4_to_mp3(video_path, audio_path)
+    # transcribe_audio(audio_path, text_path, language="pt-BR")
+    # transcribe_with_whisper(audio_path, model_size="base", input_language="pt")
+    # translate_text(text, input_language="pt", output_language="en")
 
 # Fim do arquivo mp4tomp3.py
