@@ -15,6 +15,7 @@
 # Dependência do SpeachRecognition -> FFmpeg: https://ffmpeg.org/download.html
 # pip install git+https://github.com/openai/whisper.git
 # pip install moviepy speechrecognition librosa soundfile googletrans==4.0.0-rc1 gtts pydub requests
+# https://breakfastquay.com/rubberband/
 ################################################################
 
 from moviepy import VideoFileClip, AudioFileClip
@@ -22,10 +23,14 @@ import speech_recognition as sr
 import librosa
 import soundfile as sf
 import whisper
+import pyrubberband as rb
 from googletrans import Translator
 from gtts import gTTS
 from pydub import AudioSegment
 import requests
+from audiotsm import phasevocoder
+from audiotsm.io.wav import WavReader, WavWriter
+
 
 
 
@@ -76,10 +81,16 @@ def audio_stretch(audio_path, target_duration_ms) -> str:
     target_duration = target_duration_ms / 1000
     rate = current_duration / target_duration  # inverso do fator
 
+    output_audio_path = "tempvdajst.wav"
     print(f"Ajustando velocidade: rate={rate:.3f}")
-    y_stretched = librosa.effects.time_stretch(y, rate=rate)
+    #y_stretched = librosa.effects.time_stretch(y, rate=rate)
+    #y_stretched = rb.time_stretch(y, sr, rate)
+    with WavReader(audio_path) as reader:
+        with WavWriter(output_audio_path, reader.channels, reader.samplerate) as writer:
+            tsm = phasevocoder(reader.channels, speed=rate)
+            tsm.run(reader, writer)
 
-    audio_path = "tempvdajst.wav"
+    audio_path = output_audio_path
     sf.write(audio_path, y_stretched, sr)
 
     return audio_path
