@@ -14,10 +14,13 @@
 # ------------------------------------------------------------------------------------------------
 # Dependência do SpeachRecognition -> FFmpeg: https://ffmpeg.org/download.html
 # pip install git+https://github.com/openai/whisper.git
+# pip install moviepy speechrecognition librosa soundfile googletrans==4.0.0-rc1 gtts pydub requests
 ################################################################
 
 from moviepy import VideoFileClip, AudioFileClip
 import speech_recognition as sr
+import librosa
+import soundfile as sf
 import whisper
 from googletrans import Translator
 from gtts import gTTS
@@ -26,7 +29,7 @@ import requests
 
 
 
-# Variáveis
+# Variáveis e constantes
 audio_path = "audio.mp3"
 text_path = "transcript.txt"
 video_path = "video.mp4"
@@ -34,10 +37,10 @@ output_video_path = "video_with_new_audio.mp4"
 output_audio_path = "output_audio.mp3"
 output_text_path = "translated_text.txt"
 text = "Olá, este é um exemplo de conversão de texto para fala usando Python criado por Alvaro Beck."
-language = "pt-BR"                    # ptzh-CN-BR | 
-input_language = "pt"                 # pt | zh
-output_language = "zh-CN"                # en | zh
-
+language = "pt-BR"                    # pt-BR | zh-CN | en-US
+input_language = "pt"                 # pt | zh | en
+output_language = "zh-CN"             # en-US | zh-CN | pt-BR
+END_VIDEO_START_SILENCE_MS = 2000          # Milissegundos de silêncio no início do vídeo final
 
 
 def text_to_speech(text, output_audio_path, language="pt-BR"):
@@ -53,13 +56,75 @@ def text_to_speech(text, output_audio_path, language="pt-BR"):
     print(f"Áudio gerado com sucesso! Arquivo salvo em: {output_audio_path}")
 
 
-def substitute_audio_in_video(video_path, audio_path, output_video_path):
+def mix_multiple_audios(voice_path, audio_path) -> str:
+    voice = AudioSegment.from_file(voice_path)
+    music = AudioSegment.from_file(audio_path)
+
+    music = music - 10  # reduz volume da música (em dB)
+    final_audio = music.overlay(voice)
+
+    audio_path = "tempmix.wav"
+    final_audio.export(audio_path, format="wav")
+    return audio_path
+
+
+def audio_stretch(audio_path, target_duration_ms) -> str:
+    y, sr = librosa.load(audio_path)
+
+    # Calcular fator correto
+    current_duration = len(y) / sr
+    target_duration = target_duration_ms / 1000
+    rate = current_duration / target_duration  # inverso do fator
+
+    print(f"Ajustando velocidade: rate={rate:.3f}")
+    y_stretched = librosa.effects.time_stretch(y, rate=rate)
+
+    audio_path = "tempvdajst.wav"
+    sf.write(audio_path, y_stretched, sr)
+
+    return audio_path
+
+
+def audio_adjustment(audio_path, target_duration_ms, start_ms=0) -> str:
+    audio = AudioSegment.from_file(audio_path)
+    # Adiciona silêncio no início, se necessário
+    if start_ms > 0:
+        print("Adicionando silêncio no início do áudio...")
+        silence_start = AudioSegment.silent(duration=start_ms)
+        audio = silence_start + audio
+    if len(audio) > target_duration_ms and target_duration_ms > 0:
+        print("Cortando áudio para combinar com o vídeo...")
+        audio = audio[:target_duration_ms]
+    elif target_duration_ms == 0:
+        print("Mantendo duração original do áudio...")
+        target_duration_ms = len(audio)
+    if len(audio) < target_duration_ms:
+        print("Adicionando silêncio no final do áudio...")
+        # Adiciona silêncio no final, se necessário
+        if len(audio) < target_duration_ms:
+            silence = AudioSegment.silent(duration=target_duration_ms - len(audio))
+            audio = audio + silence
+    # Exporta áudio ajustado
+    audio_path = "tempvdaj.wav"
+    audio.export(audio_path, format="wav")
+    return audio_path
+
+
+def substitute_audio_in_video(video_path, audio_path, output_video_path) -> None:
     video = VideoFileClip(video_path)
+    audio = AudioFileClip(audio_path)
+
+    if audio_path.endswith(".mp3"):
+        convert_mp3_to_wav(audio_path, "tempvd.wav", quality="stereo")
+        audio_path = "tempvd.wav"
+    audio_path = audio_adjustment(audio_path, target_duration_ms=((audio.duration+2) * 1000), start_ms = END_VIDEO_START_SILENCE_MS)
+    audio_path = audio_stretch(audio_path, target_duration_ms=int(video.duration * 1000))
     new_audio = AudioFileClip(audio_path)
+    audio.close()
 
     # Ajustar duração do áudio para combinar com o vídeo
     new_audio = new_audio.with_duration(video.duration)
-    new_audio = new_audio.with_subclip(0, video.duration)
+    #new_audio = new_audio.subclipped(0, video.duration)
 
     video_with_new_audio = video.with_audio(new_audio)
     video_with_new_audio.write_videofile(output_video_path, codec="libx264", audio_codec="aac")
@@ -75,19 +140,25 @@ def convert_mp4_to_mp3(video_path, audio_path):
     print("Conversão concluída! Áudio salvo em:", audio_path)
 
 
+def convert_mp3_to_wav(mp3_path, wav_path, quality= "mono"):
+    print("Convertendo MP3 para WAV...")
+    audio = AudioSegment.from_mp3(mp3_path)
+    if quality == "mono":
+        audio = audio.set_channels(1).set_frame_rate(16000) # Mono e 16kHz
+    else:
+        audio = audio.set_channels(2).set_frame_rate(44100) # Stereo e 44.1kHz
+    audio.export(wav_path, format="wav")
+    print(f"Arquivo WAV salvo em: {wav_path}")
+
+
 def transcribe_audio(audio_path, text_path, language="pt-BR") -> str:
     # Inicializa o reconhecedor
     r = sr.Recognizer()
 
     # Converter MP3 para WAV (para melhor compatibilidade)
     if audio_path.endswith(".mp3"):
-        print("Convertendo MP3 para WAV...")
-        audio_mp3 = audio_path
-        audio_wav = "temp.wav"
-        sound = AudioSegment.from_mp3(audio_mp3)
-        sound = sound.set_channels(1).set_frame_rate(16000) # Mono e 16kHz
-        sound.export(audio_wav, format="wav")
-        audio_path = audio_wav
+        convert_mp3_to_wav(audio_path, "temp.wav")
+        audio_path = "temp.wav"
 
     # Carrega o arquivo de áudio
     with sr.AudioFile(audio_path) as source:
