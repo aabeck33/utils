@@ -32,8 +32,6 @@ from audiotsm import phasevocoder
 from audiotsm.io.wav import WavReader, WavWriter
 
 
-
-
 # Variáveis e constantes
 audio_path = "audio.mp3"
 text_path = "transcript.txt"
@@ -91,7 +89,7 @@ def audio_stretch(audio_path, target_duration_ms) -> str:
             tsm.run(reader, writer)
 
     audio_path = output_audio_path
-    sf.write(audio_path, y_stretched, sr)
+    #sf.write(audio_path, y_stretched, sr)
 
     return audio_path
 
